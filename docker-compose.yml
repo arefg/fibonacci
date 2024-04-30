@@ -1,0 +1,55 @@
+version: '3'
+services:
+  nginx:
+    depends_on:       # We add this to avoid starting nginx before its dependent services that will result in errors sometimes
+      - api
+      - client
+    restart: always   # Because this service routes all the traffic to our application it is critical to be alwas running
+    build:            # Because this is a custom version of nginx and we want to build it using our Dockerfile
+      context: ./nginx
+      dockerfile: Dockerfile.dev
+    ports:
+      - '3050:80'     # Unlike other services that don't have any port mapping we need to expose nginx to outside world
+  postgres:
+    image: 'postgres:latest'
+    environment:
+      - POSTGRES_USER=postgres   # The PostgreSQL user
+      - POSTGRES_PASSWORD=pgpass # The PostgreSQL password
+      - POSTGRES_DB=postgres     # The PostgreSQL database
+  redis:
+    image: 'redis:latest'
+  api:
+    build:
+      context: ./server
+      dockerfile: Dockerfile.dev
+    depends_on:
+      - postgres
+    volumes:
+      - /app/node_modules
+      - ./server:/app
+    environment:
+      - REDIS_HOST=redis      # Specify Redis host to connect to
+      - REDIS_PORT=6379       # Specify Redis port to connect to Redis database
+      - PGUSER=postgres       # Specify Postgres user to connect to Postgres database
+      - PGHOST=postgres       # Specify Postgres host to connect to
+      - PGDATABASE=postgres   # Specify Postgres database name to connect to
+      - PGPASSWORD=pgpass     # Specify Postgres user's password 
+      - PGPORT=5432           # Specify Postgres port  to connect to Postgres database
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile.dev
+    volumes:
+      - /app/node_modules
+      - ./client:/app
+    stdin_open: true     # We need to set this or otherwise, we will get a "React App exited with Code 0" error in your terminal when we attempt to start up the application.
+  worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile.dev
+    volumes:
+      - /app/node_modules
+      - ./worker:/app
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
